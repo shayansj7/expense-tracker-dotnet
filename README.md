@@ -1,4 +1,4 @@
-﻿# Expense Tracker (ASP.NET Core)
+# Expense Tracker (ASP.NET Core)
 
 A personal expense tracking web application built using **C# and ASP.NET Core MVC**.
 This project allows users to record daily expenses, categorize spending, and visualize financial data.
