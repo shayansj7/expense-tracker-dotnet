@@ -2,6 +2,7 @@ using ExpenseTracker.Data;
 using ExpenseTracker.Models;
 using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
+using System.Globalization;
 
 namespace ExpenseTracker.Controllers
 {
@@ -22,11 +23,17 @@ namespace ExpenseTracker.Controllers
                 .GroupBy(e => e.Date.Month)
                 .Select(g => new
                 {
-                    Month = g.Key,
+                    MonthNumber = g.Key,
                     Total = g.Sum(e => (double)e.Amount)
                 })
-                .OrderBy(x => x.Month)
-                .ToList();
+                .OrderBy(x => x.MonthNumber)
+                .ToList()
+                .Select(x => new
+                {
+                    Month = CultureInfo.CurrentCulture.DateTimeFormat
+                            .GetAbbreviatedMonthName(x.MonthNumber),
+                    x.Total
+                }).ToList();
 
             var months = monthlyExpenses.Select(x => x.Month).ToList();
             var totals = monthlyExpenses.Select(x => x.Total).ToList();
