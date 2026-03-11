@@ -3,6 +3,18 @@
 }
 
 <div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+
+    <div class="text-center mt-5">
+        <h1>Welocome</h1>
+
+        <div class="mt-4">
+            <a class="btn btn-primary btn-lg" asp-controller="Expenses" asp-action="Index">
+                Go to Expenses
+            </a>
+
+            <a class="btn btn-success btn-lg" asp-controller="Categories" asp-action="Index">
+                Go to Categories
+            </a>
+        </div>
+    </div>
 </div>
