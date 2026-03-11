@@ -28,8 +28,14 @@ namespace ExpenseTracker.Controllers
                 .OrderBy(x => x.Month)
                 .ToList();
 
-            ViewBag.Months = monthlyExpenses.Select(x => x.Month).ToList();
-            ViewBag.Totals = monthlyExpenses.Select(x => x.Total).ToList();
+            var months = monthlyExpenses.Select(x => x.Month).ToList();
+            var totals = monthlyExpenses.Select(x => x.Total).ToList();
+
+            var average = totals.Average();
+
+            ViewBag.Months = months;
+            ViewBag.Totals = totals;
+            ViewBag.Average = average;
 
             return View();
         }
