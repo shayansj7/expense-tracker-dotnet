@@ -21,6 +21,12 @@
 
 			var ctx = document.getElementById('expenseChart').getContext('2d');
 
+			var barColors = totals.map(v => {
+				if (v < avg - 10000) return "#4CAF50";      // green (low spending)
+				if (v > avg - 10000 && v < avg) return "#FFC107";     // yellow (medium)
+				return "#F44336";                   // red (high)
+			});
+
 			new Chart(ctx, {
 				type: 'bar',
 				data: {
@@ -29,6 +35,7 @@
 					{
 						label: 'Monthly Expenses',
 						data: totals,
+						backgroundColor: barColors,
 						type: 'bar'
 					},
 					{
