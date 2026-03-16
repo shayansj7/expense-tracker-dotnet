@@ -11,9 +11,12 @@
 
 		<canvas id="expenseChart"></canvas>
 
+		<canvas id="pieChart" style="max-width:400px; display:none; margin:20px auto;"></canvas>
+
 		<script>
 			var months = @Html.Raw(Json.Serialize(ViewBag.Months));
 			var totals = @Html.Raw(Json.Serialize(ViewBag.Totals));
+			var monthNumbers = @Html.Raw(Json.Serialize(ViewBag.MonthNumbers));
 			var avg = @ViewBag.Average;
 
 			// create an array filled with the average value
@@ -27,7 +30,8 @@
 				return "#F44336";                   // red (high)
 			});
 
-			new Chart(ctx, {
+			// create the bar + line chart and keep a reference to it
+			var barChart = new Chart(ctx, {
 				type: 'bar',
 				data: {
 					labels: months,
@@ -47,6 +51,75 @@
 					}]
 				}
 			});
+
+			// pie chart variables
+			var pieCtx = document.getElementById('pieChart').getContext('2d');
+			var pieChart = null;
+
+			// generate a pleasant random color
+			function randomColor() {
+				const hue = Math.floor(Math.random() * 360);
+				return `hsl(${hue} 70% 50%)`;
+			}
+
+			function renderPie(labels, values, title) {
+				document.getElementById('pieChart').style.display = 'block';
+
+				if (pieChart) {
+					pieChart.data.labels = labels;
+					pieChart.data.datasets[0].data = values;
+					pieChart.data.datasets[0].backgroundColor = labels.map(() => randomColor());
+					if (pieChart.options.plugins && pieChart.options.plugins.title)
+						pieChart.options.plugins.title.text = title + ' - Category Breakdown';
+					pieChart.update();
+					return;
+				}
+
+				pieChart = new Chart(pieCtx, {
+					type: 'pie',
+					data: {
+						labels: labels,
+						datasets: [{
+							data: values,
+							backgroundColor: labels.map(() => randomColor())
+						}]
+					},
+					options: {
+						plugins: {
+							title: {
+								display: true,
+								text: title + ' - Category Breakdown'
+							},
+							legend: {
+								position: 'bottom'
+							}
+						}
+					}
+				});
+			}
+
+			// click handler to get the clicked bar and request month breakdown
+			document.getElementById('expenseChart').onclick = function (evt) {
+				const points = barChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+				if (!points.length) return;
+
+				const first = points[0];
+				const monthIndex = first.index;
+				const monthNumber = monthNumbers[monthIndex];
+
+				fetch(`/Home/MonthBreakdown?month=${monthNumber}`)
+					.then(response => response.json())
+					.then(data => {
+						// data items contain { Category, Total }
+						const labels = data.map(d => d.Category || d.category || 'Uncategorized');
+						const values = data.map(d => d.Total ?? d.total ?? 0);
+						const title = months[monthIndex] || `Month ${monthNumber}`;
+						renderPie(labels, values, title);
+					})
+					.catch(err => {
+						console.error('Failed to load month breakdown', err);
+					});
+			};
 		</script>
 
 		<div class="mt-4">
