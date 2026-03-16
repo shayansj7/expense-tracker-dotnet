@@ -8,12 +8,16 @@
 		<h1>Welocome</h1>
 
 		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 
 		<canvas id="expenseChart"></canvas>
 
 		<canvas id="pieChart" style="max-width:400px; display:none; margin:20px auto;"></canvas>
 
 		<script>
+			// register the datalabels plugin
+			Chart.register(ChartDataLabels);
+
 			var months = @Html.Raw(Json.Serialize(ViewBag.Months));
 			var totals = @Html.Raw(Json.Serialize(ViewBag.Totals));
 			var monthNumbers = @Html.Raw(Json.Serialize(ViewBag.MonthNumbers));
@@ -36,19 +40,28 @@
 				data: {
 					labels: months,
 					datasets: [
-					{
-						label: 'Monthly Expenses',
-						data: totals,
-						backgroundColor: barColors,
-						type: 'bar'
-					},
-					{
-						label: 'Average Monthly Expense',
-						data: avgLine,
-						type: 'line',
-						borderWidth: 3,
-						fill: false
-					}]
+						{
+							label: 'Monthly Expenses',
+							data: totals,
+							backgroundColor: barColors,
+							type: 'bar'
+						},
+						{
+							label: 'Average Monthly Expense',
+							data: avgLine,
+							type: 'line',
+							borderWidth: 3,
+							fill: false
+						}
+					]
+				},
+				options: {
+					plugins: {
+						// explicitly disable datalabels for this chart so numbers don't appear on bars/line
+						datalabels: {
+							display: false
+						}
+					}
 				}
 			});
 
@@ -62,24 +75,47 @@
 				return `hsl(${hue} 70% 50%)`;
 			}
 
+			// Replace/update the pie chart by destroying any existing instance and creating a fresh one.
+			// This avoids stale plugin/state issues and guarantees a full redraw with new data.
 			function renderPie(labels, values, title) {
 				document.getElementById('pieChart').style.display = 'block';
 
+				// compute sum and percentages
+				const sum = values.reduce((s, v) => s + (Number(v) || 0), 0);
+				const percentages = values.map(v => sum ? (Number(v) / sum * 100) : 0);
+
+				// labels for legend (show percent)
+				const legendLabels = labels.map((l, i) => `${l} (${percentages[i].toFixed(1)}%)`);
+
+				// tooltip callback: show original name, absolute value and percent
+				function tooltipLabelCallback(context) {
+					const idx = context.dataIndex;
+					const value = context.raw ?? 0;
+					const pct = percentages[idx] ?? 0;
+					const name = labels[idx] ?? context.label;
+					return `${name}: ${value} (${pct.toFixed(1)}%)`;
+				}
+
+				// datalabels formatter — show percentage inside slice
+				function datalabelsFormatter(value, context) {
+					const idx = context.dataIndex;
+					const pct = percentages[idx] ?? 0;
+					return pct ? pct.toFixed(1) + '%' : '';
+				}
+
+				// destroy existing pieChart (if any) to ensure fresh state
 				if (pieChart) {
-					pieChart.data.labels = labels;
-					pieChart.data.datasets[0].data = values;
-					pieChart.data.datasets[0].backgroundColor = labels.map(() => randomColor());
-					if (pieChart.options.plugins && pieChart.options.plugins.title)
-						pieChart.options.plugins.title.text = title + ' - Category Breakdown';
-					pieChart.update();
-					return;
+					try { pieChart.destroy(); } catch (e) { /* ignore */ }
+					pieChart = null;
 				}
 
 				pieChart = new Chart(pieCtx, {
 					type: 'pie',
 					data: {
-						labels: labels,
+						// use legendLabels so the legend shows name + percent
+						labels: legendLabels,
 						datasets: [{
+							// store raw values in dataset; datalabels formatter uses percentages closure
 							data: values,
 							backgroundColor: labels.map(() => randomColor())
 						}]
@@ -92,15 +128,30 @@
 							},
 							legend: {
 								position: 'bottom'
+							},
+							tooltip: {
+								callbacks: {
+									label: tooltipLabelCallback
+								}
+							},
+							// enable datalabels plugin to render percentages inside slices
+							datalabels: {
+								color: 'white',
+								formatter: datalabelsFormatter,
+								font: {
+									weight: 'bold',
+									size: 12
+								}
 							}
 						}
 					}
 				});
 			}
 
-			// click handler to get the clicked bar and request month breakdown
-			document.getElementById('expenseChart').onclick = function (evt) {
-				const points = barChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+			// use the chart canvas' onclick and a robust lookup mode so clicks reliably select a bar
+			barChart.canvas.onclick = function (evt) {
+				// use 'index' mode with intersect=false to select the whole bar group reliably
+				const points = barChart.getElementsAtEventForMode(evt, 'index', { intersect: false }, true);
 				if (!points.length) return;
 
 				const first = points[0];
@@ -108,11 +159,14 @@
 				const monthNumber = monthNumbers[monthIndex];
 
 				fetch(`/Home/MonthBreakdown?month=${monthNumber}`)
-					.then(response => response.json())
+					.then(response => {
+						if (!response.ok) throw new Error('Network response was not ok');
+						return response.json();
+					})
 					.then(data => {
 						// data items contain { Category, Total }
 						const labels = data.map(d => d.Category || d.category || 'Uncategorized');
-						const values = data.map(d => d.Total ?? d.total ?? 0);
+						const values = data.map(d => Number(d.Total ?? d.total ?? 0));
 						const title = months[monthIndex] || `Month ${monthNumber}`;
 						renderPie(labels, values, title);
 					})
